@@ -356,6 +356,41 @@ if hasattr(__threading__, '_CRLock'):
     __implements__.append('_CRLock')
 
 
+def _debug_file_path() -> str:
+    # Override with: GEVENT_DEBUG_FILE=/tmp/gevent_debug.txt
+    return os.environ.get(
+        "GEVENT_DEBUG_FILE",
+        "gevent_debug.txt"
+    )
+
+import time
+def _debug_append(msg: str) -> None:
+    try:
+        line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}" \
+            f" pid={os.getpid()} tid={get_ident()} py={sys.version_info[:3]}] {msg}\n"
+        with open(_debug_file_path(), "a", encoding="utf-8") as f:
+            f.write(line)
+            f.flush()  # best-effort; ignore failures
+    except Exception:
+        # Never let debugging break runtime paths
+        pass
+
+def _dump_thread_info(thread) -> str:
+    try:
+        # Keep this cheap: only a few attributes, all via getattr
+        info = {
+            "repr": repr(thread),
+            "name": getattr(thread, "name", None),
+            "ident": getattr(thread, "ident", None),
+            "daemon": getattr(thread, "daemon", None),
+            "is_alive": getattr(thread, "is_alive", lambda: None)(),
+            "_handle?": hasattr(thread, "_handle"),
+            "_os_thread_handle?": hasattr(thread, "_os_thread_handle"),
+        }
+        return str(info)
+    except Exception as e:
+        return f"<thread-introspection-failed: {e!r}>"
+    
 class _ForkHooks:
 
     _before_fork_current_thread = None
@@ -394,9 +429,19 @@ class _ForkHooks:
                     h = '_os_thread_handle' if _needs_os_thread_handle else '_handle'
                     handle = getattr(thread, h)
                 except AttributeError:
+                    _debug_append(
+                        f"NO HANDLE: attr={h} _needs_os_thread_handle={_needs_os_thread_handle} "
+                        f"thread={_dump_thread_info(thread)}"
+                    )
                     assert sys.version_info[:2] < (3, 13)
                     assert not thread.is_alive()
                 else:
+                    _debug_append(
+                        f"HAVE HANDLE: attr={h} handle={repr(handle)} "
+                        f"has__set_done={hasattr(handle, '_set_done')} "
+                        f"_needs_os_thread_handle={_needs_os_thread_handle} "
+                        f"thread={_dump_thread_info(thread)}"
+                    )
                     # We DO NOT want to bounce to the hub. We're running
                     # at a very sensitive time and it's best to keep tight control
                     # over what gets to run.

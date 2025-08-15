@@ -102,7 +102,7 @@ _weakref = None
 # conflicts with subclasses. This was backported to 3.13.4.
 # https://github.com/python/cpython/issues/132578
 # https://github.com/python/cpython/pull/132696
-_needs_os_thread_handle = sys.version_info[:3] > (3, 13, 4)
+_needs_os_thread_handle = sys.version_info[:3] > (3, 13, 6)
 
 class _DummyThread(_DummyThread_):
     # We avoid calling the superclass constructor. This makes us about
